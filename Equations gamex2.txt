@@ -1,0 +1,614 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Equation Quest: Rational Realm Board Game</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600;700&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap">
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+
+  <style>
+    body {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      background: #0b1329;
+      color: #f8fafc;
+      user-select: none;
+    }
+    h1, h2, h3, .font-fredoka {
+      font-family: 'Fredoka', cursive;
+    }
+    
+    /* Board Path Styling */
+    .board-grid {
+      display: grid;
+      grid-template-columns: repeat(6, 1fr);
+      grid-template-rows: repeat(4, 1fr);
+      gap: 10px;
+      position: relative;
+    }
+
+    .board-tile {
+      position: relative;
+      background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+      border: 3px solid #334155;
+      border-radius: 16px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3), inset 0 2px 4px rgba(255, 255, 255, 0.05);
+      transition: all 0.2s ease;
+      min-height: 85px;
+    }
+
+    .board-tile.start-tile {
+      background: linear-gradient(135deg, #15803d 0%, #166534 100%);
+      border-color: #4ade80;
+    }
+    .board-tile.finish-tile {
+      background: linear-gradient(135deg, #b91c1c 0%, #991b1b 100%);
+      border-color: #f87171;
+    }
+    .board-tile.bonus-tile {
+      background: linear-gradient(135deg, #854d0e 0%, #713f12 100%);
+      border-color: #facc15;
+    }
+
+    /* Player Token Styling */
+    .player-token {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      border: 3px solid #ffffff;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.5), inset 0 2px 4px rgba(255,255,255,0.4);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      font-weight: 800;
+      transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    .token-p1 {
+      background: radial-gradient(circle at 30% 30%, #ff6b6b, #ee5253);
+      color: white;
+    }
+    .token-p2 {
+      background: radial-gradient(circle at 30% 30%, #48dbfb, #0abde3);
+      color: #0c2461;
+    }
+
+    /* Interactive Spinner Canvas Frame */
+    .spinner-container {
+      position: relative;
+      width: 200px;
+      height: 200px;
+      margin: 0 auto;
+    }
+    .spinner-pointer {
+      position: absolute;
+      top: -10px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 0;
+      height: 0;
+      border-left: 14px solid transparent;
+      border-right: 14px solid transparent;
+      border-top: 24px solid #ef4444;
+      z-index: 30;
+      filter: drop-shadow(0 4px 6px rgba(0,0,0,0.4));
+    }
+
+    @keyframes turnPulse {
+      0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(249, 115, 22, 0.5); }
+      50% { transform: scale(1.02); box-shadow: 0 0 0 10px rgba(249, 115, 22, 0); }
+    }
+    .active-turn-card {
+      animation: turnPulse 2s infinite;
+    }
+  </style>
+</head>
+<body class="min-h-screen bg-slate-950 p-4 md:p-6 flex flex-col items-center">
+
+  <!-- Header Section -->
+  <header class="w-full max-w-6xl flex flex-col md:flex-row items-center justify-between mb-4 bg-slate-900 border border-slate-800 p-4 rounded-2xl shadow-xl">
+    <div class="flex items-center gap-3 mb-3 md:mb-0">
+      <div class="bg-gradient-to-tr from-amber-500 to-orange-500 p-3 rounded-xl text-slate-950 text-2xl shadow-lg">
+        <i class="fa-solid fa-gamepad"></i>
+      </div>
+      <div>
+        <h1 class="text-2xl md:text-3xl font-bold text-amber-400 tracking-wide">Equation Quest: Rational Realm</h1>
+        <p class="text-xs text-slate-400">7th Grade Math • 24 Question Challenge • Points & Movement</p>
+      </div>
+    </div>
+
+    <!-- Active Player Turn Indicator -->
+    <div class="flex items-center gap-3">
+      <div id="turnBadge" class="flex items-center gap-2 px-4 py-2 rounded-xl font-bold text-sm bg-red-500/20 text-red-400 border border-red-500/40">
+        <span id="turnDot" class="w-3 h-3 rounded-full bg-red-500 animate-ping"></span>
+        <span id="turnText">Player 1 Turn</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Game Dashboard -->
+  <main class="w-full max-w-6xl grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+    <!-- Left Column: The Board Track (7 Cols) -->
+    <section class="lg:col-span-7 bg-slate-900 border border-slate-800 p-5 rounded-2xl shadow-2xl flex flex-col justify-between">
+      <div class="flex items-center justify-between mb-3">
+        <h2 class="text-lg font-bold text-slate-200 flex items-center gap-2">
+          <i class="fa-solid fa-map text-amber-400"></i> Board Track (24 Tiles)
+        </h2>
+        <div class="flex items-center gap-3 text-xs text-slate-400">
+          <span class="flex items-center gap-1"><span class="w-3 h-3 rounded-full bg-emerald-600 inline-block"></span> Start</span>
+          <span class="flex items-center gap-1"><span class="w-3 h-3 rounded-full bg-yellow-600 inline-block"></span> +1 Bonus</span>
+          <span class="flex items-center gap-1"><span class="w-3 h-3 rounded-full bg-red-600 inline-block"></span> Finish</span>
+        </div>
+      </div>
+
+      <!-- Winding Board Container -->
+      <div id="boardGrid" class="board-grid my-auto">
+        <!-- Board tiles generated dynamically by JS -->
+      </div>
+    </section>
+
+    <!-- Right Column: Control Panel, Spinner & Scoreboard (5 Cols) -->
+    <section class="lg:col-span-5 flex flex-col gap-6">
+      
+      <!-- Player Scorecards -->
+      <div class="grid grid-cols-2 gap-3">
+        <!-- Player 1 Card -->
+        <div id="p1Card" class="bg-slate-900 border-2 border-red-500/40 p-3.5 rounded-2xl flex flex-col items-center text-center transition-all active-turn-card relative overflow-hidden">
+          <div class="w-10 h-10 rounded-full bg-red-500 text-white font-bold flex items-center justify-center mb-1 text-lg shadow-lg">
+            P1
+          </div>
+          <span class="text-sm font-bold text-red-400">Player 1</span>
+          <div class="mt-2 bg-slate-950 px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-300 w-full flex justify-between">
+            <span>Tile: <b id="p1Pos" class="text-red-400">0</b>/23</span>
+            <span>Pts: <b id="p1Pts" class="text-amber-400">0</b></span>
+          </div>
+          <div id="p1ScoreAnim" class="absolute inset-0 bg-emerald-500/20 text-emerald-300 font-extrabold flex items-center justify-center text-sm transition-opacity opacity-0 pointer-events-none"></div>
+        </div>
+
+        <!-- Player 2 Card -->
+        <div id="p2Card" class="bg-slate-900 border-2 border-slate-800 p-3.5 rounded-2xl flex flex-col items-center text-center transition-all relative overflow-hidden">
+          <div class="w-10 h-10 rounded-full bg-cyan-400 text-slate-950 font-bold flex items-center justify-center mb-1 text-lg shadow-lg">
+            P2
+          </div>
+          <span class="text-sm font-bold text-cyan-400">Player 2</span>
+          <div class="mt-2 bg-slate-950 px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-300 w-full flex justify-between">
+            <span>Tile: <b id="p2Pos" class="text-cyan-400">0</b>/23</span>
+            <span>Pts: <b id="p2Pts" class="text-amber-400">0</b></span>
+          </div>
+          <div id="p2ScoreAnim" class="absolute inset-0 bg-emerald-500/20 text-emerald-300 font-extrabold flex items-center justify-center text-sm transition-opacity opacity-0 pointer-events-none"></div>
+        </div>
+      </div>
+
+      <!-- Interactive Spinner Canvas Card -->
+      <div class="bg-slate-900 border border-slate-800 p-5 rounded-2xl flex flex-col items-center justify-center text-center shadow-2xl relative">
+        <h3 class="text-sm font-bold text-slate-300 mb-2 uppercase tracking-wider">
+          <i class="fa-solid fa-arrows-spin text-amber-400 mr-1"></i> Interactive Spinner (1 - 4)
+        </h3>
+
+        <div class="spinner-container">
+          <div class="spinner-pointer"></div>
+          <canvas id="spinnerCanvas" width="200" height="200" class="cursor-pointer rounded-full shadow-2xl"></canvas>
+        </div>
+
+        <button id="spinBtn" onclick="spinWheel()" class="mt-4 w-full py-3 px-6 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 font-bold text-lg rounded-xl shadow-lg transition transform active:scale-95 flex items-center justify-center gap-2">
+          <i class="fa-solid fa-play"></i> SPIN WHEEL
+        </button>
+
+        <div id="spinResultText" class="mt-2 text-xs font-semibold text-amber-300 h-4">
+          Click spin to reveal movement potential!
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- QUESTION MODAL DIALOG -->
+  <div id="questionModal" class="fixed inset-0 bg-slate-950/85 backdrop-blur-md z-50 flex items-center justify-center p-4 hidden">
+    <div class="bg-slate-900 border-2 border-slate-700 w-full max-w-xl rounded-3xl p-6 shadow-2xl relative flex flex-col gap-4">
+      
+      <!-- Modal Header -->
+      <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+        <div class="flex items-center gap-2">
+          <span id="modalPlayerBadge" class="px-3 py-1 rounded-full text-xs font-bold bg-red-500/20 text-red-400 border border-red-500/40">
+            Player 1 Turn
+          </span>
+          <span id="modalSpinBadge" class="px-2.5 py-1 rounded-full text-xs font-bold bg-amber-500/20 text-amber-400 border border-amber-500/40">
+            Spun: 3 Spaces
+          </span>
+        </div>
+        <div class="flex items-center gap-2">
+          <span id="modalDiffBadge" class="text-xs font-extrabold px-2.5 py-1 rounded-lg">
+            MEDIUM
+          </span>
+          <span id="modalPointsBadge" class="text-xs font-extrabold bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2.5 py-1 rounded-lg">
+            +200 PTS
+          </span>
+        </div>
+      </div>
+
+      <!-- Question Text Display -->
+      <div class="py-2">
+        <p id="modalQuestionText" class="text-xl md:text-2xl font-bold text-slate-100 text-center leading-relaxed">
+          Solve for x: -2.5x + 4 = -11
+        </p>
+      </div>
+
+      <!-- Answer Input Section -->
+      <div id="answerContainer" class="flex flex-col gap-3">
+        <div class="flex flex-col gap-2">
+          <label for="userAnswerInput" class="text-xs font-semibold text-slate-400">Enter your simplified answer (integer, decimal, or fraction):</label>
+          <div class="flex gap-2">
+            <input type="text" id="userAnswerInput" placeholder="e.g., 6 or -1.5 or -3/2" 
+              class="flex-1 bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-lg font-bold text-amber-300 focus:outline-none focus:border-amber-500 transition">
+            <button onclick="submitAnswer()" class="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold px-6 py-3 rounded-xl transition shadow-lg flex items-center gap-2">
+              Submit <i class="fa-solid fa-paper-plane"></i>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Solution Feedback Area -->
+      <div id="feedbackArea" class="hidden p-4 rounded-2xl text-sm flex flex-col gap-2">
+        <div id="feedbackHeader" class="font-bold text-base flex items-center gap-2"></div>
+        <p id="feedbackText" class="text-slate-300 leading-relaxed"></p>
+        <button id="nextTurnBtn" onclick="closeQuestionModal()" class="mt-2 w-full py-2.5 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-xl transition">
+          Continue Turn <i class="fa-solid fa-arrow-right ml-1"></i>
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+    // 24 Categorized 7th Grade Math Questions (1 & 2 step, rational numbers, word problems)
+    const questions = [
+      // 1-STEP EQUATIONS (Easy - 100 PTS)
+      { id: 1, type: "1-Step", diff: "EASY", pts: 100, q: "Solve for x: -4x = 36", a: -9, steps: "Divide both sides by -4: x = 36 / (-4) = -9" },
+      { id: 2, type: "1-Step", diff: "EASY", pts: 100, q: "Solve for y: y / (-3) = -12", a: 36, steps: "Multiply both sides by -3: y = (-12) * (-3) = 36" },
+      { id: 3, type: "1-Step", diff: "EASY", pts: 100, q: "Solve for m: 0.5m = -4.5", a: -9, steps: "Divide both sides by 0.5: m = -4.5 / 0.5 = -9" },
+      { id: 4, type: "1-Step", diff: "EASY", pts: 100, q: "Solve for k: -2.4 + k = -6.8", a: -4.4, steps: "Add 2.4 to both sides: k = -6.8 + 2.4 = -4.4" },
+      { id: 5, type: "1-Step", diff: "EASY", pts: 100, q: "Solve for p: p - 7.5 = -12.3", a: -4.8, steps: "Add 7.5 to both sides: p = -12.3 + 7.5 = -4.8" },
+      { id: 6, type: "1-Step", diff: "EASY", pts: 100, q: "Solve for z: -8z = -96", a: 12, steps: "Divide both sides by -8: z = -96 / (-8) = 12" },
+      { id: 7, type: "1-Step", diff: "EASY", pts: 100, q: "Solve for n: n / 0.4 = -15", a: -6, steps: "Multiply both sides by 0.4: n = -15 * 0.4 = -6" },
+      { id: 8, type: "1-Step", diff: "EASY", pts: 100, q: "Solve for b: b + 14.2 = 8.1", a: -6.1, steps: "Subtract 14.2 from both sides: b = 8.1 - 14.2 = -6.1" },
+
+      // 2-STEP EQUATIONS (Medium - 200 PTS)
+      { id: 9, type: "2-Step", diff: "MEDIUM", pts: 200, q: "Solve for x: 3x - 7 = 14", a: 7, steps: "Add 7 to both sides (3x = 21), then divide by 3: x = 7" },
+      { id: 10, type: "2-Step", diff: "MEDIUM", pts: 200, q: "Solve for y: -2y + 5 = -11", a: 8, steps: "Subtract 5 (-2y = -16), then divide by -2: y = 8" },
+      { id: 11, type: "2-Step", diff: "MEDIUM", pts: 200, q: "Solve for n: (n / 4) - 3 = -8", a: -20, steps: "Add 3 (n / 4 = -5), then multiply by 4: n = -20" },
+      { id: 12, type: "2-Step", diff: "MEDIUM", pts: 200, q: "Solve for w: -5w - 12 = 18", a: -6, steps: "Add 12 (-5w = 30), then divide by -5: w = -6" },
+      { id: 13, type: "2-Step", diff: "MEDIUM", pts: 200, q: "Solve for c: 0.4c + 1.2 = 3.6", a: 6, steps: "Subtract 1.2 (0.4c = 2.4), then divide by 0.4: c = 6" },
+      { id: 14, type: "2-Step", diff: "MEDIUM", pts: 200, q: "Solve for a: -3a - 4.5 = 7.5", a: -4, steps: "Add 4.5 (-3a = 12), then divide by -3: a = -4" },
+      { id: 15, type: "2-Step", diff: "MEDIUM", pts: 200, q: "Solve for p: 2.5p - 5 = 7.5", a: 5, steps: "Add 5 (2.5p = 12.5), then divide by 2.5: p = 5" },
+      { id: 16, type: "2-Step", diff: "MEDIUM", pts: 200, q: "Solve for v: (v / -6) + 7 = 2", a: 30, steps: "Subtract 7 (v / -6 = -5), then multiply by -6: v = 30" },
+
+      // RATIONAL & WORD PROBLEMS (Hard - 300 PTS)
+      { id: 17, type: "Word Problem", diff: "HARD", pts: 300, q: "A diver descends at -3.5 feet per second. How many seconds (t) will it take to reach -28 feet? (-3.5t = -28)", a: 8, steps: "Divide -28 by -3.5: t = 8 seconds" },
+      { id: 18, type: "Rational Equation", diff: "HARD", pts: 300, q: "Solve for m: -1/2 * m + 4 = 10", a: -12, steps: "Subtract 4 (-1/2 m = 6), then multiply by -2: m = -12" },
+      { id: 19, type: "Word Problem", diff: "HARD", pts: 300, q: "Maya's account dropped by x dollars each day for 4 days plus a $15 fee, changing total balance by -$55. Solve: -4x - 15 = -55", a: 10, steps: "Add 15 (-4x = -40), then divide by -4: x = $10 per day" },
+      { id: 20, type: "Rational Equation", diff: "HARD", pts: 300, q: "Solve for k: -2/3 * k = 8", a: -12, steps: "Multiply both sides by -3/2: k = 8 * (-3/2) = -12" },
+      { id: 21, type: "Word Problem", diff: "HARD", pts: 300, q: "Temperature dropped 2.5°C per hour for h hours to reach -15°C. Solve: -2.5h = -15", a: 6, steps: "Divide -15 by -2.5: h = 6 hours" },
+      { id: 22, type: "2-Step Rational", diff: "HARD", pts: 300, q: "Solve for q: 3/4 * q - 5 = 10", a: 20, steps: "Add 5 (3/4 q = 15), then multiply by 4/3: q = 20" },
+      { id: 23, type: "Word Problem", diff: "HARD", pts: 300, q: "Ethan spent $14.50 on a ticket and 3 snack boxes (s) for a total of $26.50. Solve: 3s + 14.50 = 26.50", a: 4, steps: "Subtract 14.50 (3s = 12), then divide by 3: s = $4" },
+      { id: 24, type: "2-Step Rational", diff: "HARD", pts: 300, q: "Solve for d: -1.5d + 8.2 = -3.8", a: 8, steps: "Subtract 8.2 (-1.5d = -12), then divide by -1.5: d = 8" }
+    ];
+
+    // Game State Variables
+    let p1Pos = 0;
+    let p2Pos = 0;
+    let p1Pts = 0;
+    let p2Pts = 0;
+    let currentPlayer = 1;
+    let currentSpin = 0;
+    let activeQuestion = null;
+    let isSpinning = false;
+    let availableQuestionIndices = Array.from({length: 24}, (_, i) => i);
+
+    const boardSize = 24;
+    const bonusTiles = [6, 14, 19];
+
+    // Build Board UI
+    const boardEl = document.getElementById('boardGrid');
+    function buildBoard() {
+      boardEl.innerHTML = '';
+      for (let i = 0; i < boardSize; i++) {
+        const tile = document.createElement('div');
+        tile.className = 'board-tile';
+        if (i === 0) {
+          tile.classList.add('start-tile');
+          tile.innerHTML = '<span class="text-xs font-extrabold text-emerald-300">START</span>';
+        } else if (i === boardSize - 1) {
+          tile.classList.add('finish-tile');
+          tile.innerHTML = '<span class="text-xs font-extrabold text-red-300">FINISH 🏆</span>';
+        } else if (bonusTiles.includes(i)) {
+          tile.classList.add('bonus-tile');
+          tile.innerHTML = `<span class="text-xs font-extrabold text-yellow-300">${i}</span><span class="text-[10px] text-yellow-200">+1 Bonus</span>`;
+        } else {
+          tile.innerHTML = `<span class="text-xs font-bold text-slate-400">${i}</span>`;
+        }
+
+        const tokensDiv = document.createElement('div');
+        tokensDiv.className = 'flex gap-1 absolute bottom-1.5';
+        tokensDiv.id = `tile-tokens-${i}`;
+        tile.appendChild(tokensDiv);
+
+        boardEl.appendChild(tile);
+      }
+      renderTokens();
+    }
+
+    function renderTokens() {
+      for (let i = 0; i < boardSize; i++) {
+        const container = document.getElementById(`tile-tokens-${i}`);
+        if (container) {
+          container.innerHTML = '';
+        }
+      }
+
+      const p1Container = document.getElementById(`tile-tokens-${p1Pos}`);
+      if (p1Container) {
+        const t1 = document.createElement('div');
+        t1.className = 'player-token token-p1';
+        t1.innerText = 'P1';
+        p1Container.appendChild(t1);
+      }
+
+      const p2Container = document.getElementById(`tile-tokens-${p2Pos}`);
+      if (p2Container) {
+        const t2 = document.createElement('div');
+        t2.className = 'player-token token-p2';
+        t2.innerText = 'P2';
+        p2Container.appendChild(t2);
+      }
+
+      document.getElementById('p1Pos').innerText = p1Pos;
+      document.getElementById('p2Pos').innerText = p2Pos;
+      document.getElementById('p1Pts').innerText = p1Pts;
+      document.getElementById('p2Pts').innerText = p2Pts;
+    }
+
+    // Spinner Canvas Physics Drawing
+    const canvas = document.getElementById('spinnerCanvas');
+    const ctx = canvas.getContext('2d');
+    let currentAngle = 0;
+
+    function drawSpinner(angle = 0) {
+      const slices = [1, 2, 3, 4];
+      const colors = ['#ef4444', '#3b82f6', '#10b981', '#f59e0b'];
+      const sliceAngle = (2 * Math.PI) / 4;
+
+      ctx.clearRect(0, 0, 200, 200);
+
+      for (let i = 0; i < 4; i++) {
+        ctx.beginPath();
+        ctx.fillStyle = colors[i];
+        ctx.moveTo(100, 100);
+        ctx.arc(100, 100, 90, angle + i * sliceAngle, angle + (i + 1) * sliceAngle);
+        ctx.fill();
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = '#0f172a';
+        ctx.stroke();
+
+        // Numbers
+        ctx.save();
+        ctx.translate(100, 100);
+        ctx.rotate(angle + i * sliceAngle + sliceAngle / 2);
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 26px Fredoka';
+        ctx.fillText(slices[i], 50, 8);
+        ctx.restore();
+      }
+
+      // Center Hub
+      ctx.beginPath();
+      ctx.fillStyle = '#0f172a';
+      ctx.arc(100, 100, 20, 0, 2 * Math.PI);
+      ctx.fill();
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = '#334155';
+      ctx.stroke();
+    }
+
+    function spinWheel() {
+      if (isSpinning) return;
+      isSpinning = true;
+      document.getElementById('spinBtn').disabled = true;
+
+      let spins = 25 + Math.floor(Math.random() * 12);
+      let speed = 0.25;
+      let count = 0;
+
+      function animate() {
+        currentAngle += speed;
+        drawSpinner(currentAngle);
+        count++;
+
+        if (count < spins) {
+          requestAnimationFrame(animate);
+        } else {
+          isSpinning = false;
+          currentSpin = Math.floor(Math.random() * 4) + 1;
+          document.getElementById('spinResultText').innerText = `Spun a ${currentSpin}! Answer the equation to move forward.`;
+          showQuestionModal();
+        }
+      }
+      animate();
+    }
+
+    function showQuestionModal() {
+      if (availableQuestionIndices.length === 0) {
+        availableQuestionIndices = Array.from({length: 24}, (_, i) => i);
+      }
+      const randIdx = Math.floor(Math.random() * availableQuestionIndices.length);
+      const qIndex = availableQuestionIndices.splice(randIdx, 1)[0];
+      activeQuestion = questions[qIndex];
+
+      // Update Modal Elements
+      const pBadge = document.getElementById('modalPlayerBadge');
+      if (currentPlayer === 1) {
+        pBadge.className = 'px-3 py-1 rounded-full text-xs font-bold bg-red-500/20 text-red-400 border border-red-500/40';
+        pBadge.innerText = 'Player 1 Turn';
+      } else {
+        pBadge.className = 'px-3 py-1 rounded-full text-xs font-bold bg-cyan-500/20 text-cyan-400 border border-cyan-500/40';
+        pBadge.innerText = 'Player 2 Turn';
+      }
+
+      document.getElementById('modalSpinBadge').innerText = `Spun: ${currentSpin} Spaces`;
+      document.getElementById('modalQuestionText').innerText = activeQuestion.q;
+      document.getElementById('modalPointsBadge').innerText = `+${activeQuestion.pts} PTS`;
+
+      const diffBadge = document.getElementById('modalDiffBadge');
+      if (activeQuestion.diff === 'EASY') {
+        diffBadge.className = 'text-xs font-extrabold bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 px-2.5 py-1 rounded-lg';
+      } else if (activeQuestion.diff === 'MEDIUM') {
+        diffBadge.className = 'text-xs font-extrabold bg-amber-500/20 text-amber-400 border border-amber-500/40 px-2.5 py-1 rounded-lg';
+      } else {
+        diffBadge.className = 'text-xs font-extrabold bg-purple-500/20 text-purple-400 border border-purple-500/40 px-2.5 py-1 rounded-lg';
+      }
+      diffBadge.innerText = activeQuestion.diff;
+
+      // Reset Modal UI State
+      document.getElementById('feedbackArea').classList.add('hidden');
+      document.getElementById('answerContainer').classList.remove('hidden');
+      const input = document.getElementById('userAnswerInput');
+      input.value = '';
+      
+      document.getElementById('questionModal').classList.remove('hidden');
+      setTimeout(() => input.focus(), 100);
+    }
+
+    function parseMathInput(str) {
+      if (!str) return null;
+      str = str.trim();
+      if (str.includes('/')) {
+        const parts = str.split('/');
+        if (parts.length === 2) {
+          const num = parseFloat(parts[0]);
+          const den = parseFloat(parts[1]);
+          if (!isNaN(num) && !isNaN(den) && den !== 0) return num / den;
+        }
+      }
+      const val = parseFloat(str);
+      return isNaN(val) ? null : val;
+    }
+
+    function submitAnswer() {
+      const inputVal = document.getElementById('userAnswerInput').value;
+      const userAns = parseMathInput(inputVal);
+      const feedbackArea = document.getElementById('feedbackArea');
+      const feedbackHeader = document.getElementById('feedbackHeader');
+      const feedbackText = document.getElementById('feedbackText');
+
+      document.getElementById('answerContainer').classList.add('hidden');
+      feedbackArea.classList.remove('hidden');
+
+      const animEl = currentPlayer === 1 ? document.getElementById('p1ScoreAnim') : document.getElementById('p2ScoreAnim');
+
+      if (userAns !== null && Math.abs(userAns - activeQuestion.a) < 0.05) {
+        // CORRECT ANSWER
+        feedbackHeader.className = 'font-bold text-base text-emerald-400 flex items-center gap-2';
+        feedbackHeader.innerHTML = `<i class="fa-solid fa-circle-check"></i> CORRECT! (+${activeQuestion.pts} PTS & Move ${currentSpin} Spaces)`;
+        feedbackText.innerText = `Great work! ${activeQuestion.steps}`;
+        
+        // Award points & Move
+        if (currentPlayer === 1) {
+          p1Pts += activeQuestion.pts;
+          p1Pos = Math.min(boardSize - 1, p1Pos + currentSpin);
+          if (bonusTiles.includes(p1Pos)) p1Pos = Math.min(boardSize - 1, p1Pos + 1);
+        } else {
+          p2Pts += activeQuestion.pts;
+          p2Pos = Math.min(boardSize - 1, p2Pos + currentSpin);
+          if (bonusTiles.includes(p2Pos)) p2Pos = Math.min(boardSize - 1, p2Pos + 1);
+        }
+
+        // Trigger Score Overlay Animation
+        if (animEl) {
+          animEl.innerText = `+${activeQuestion.pts} PTS!`;
+          animEl.classList.remove('opacity-0');
+          setTimeout(() => animEl.classList.add('opacity-0'), 1800);
+        }
+      } else {
+        // INCORRECT ANSWER (Move forward, 0 points)
+        feedbackHeader.className = 'font-bold text-base text-amber-400 flex items-center gap-2';
+        feedbackHeader.innerHTML = `<i class="fa-solid fa-circle-xmark"></i> INCORRECT (Moved ${currentSpin} Spaces, 0 PTS)`;
+        feedbackText.innerText = `The correct answer was ${activeQuestion.a}. Solution: ${activeQuestion.steps}`;
+
+        // Move player forward, but do NOT award points
+        if (currentPlayer === 1) {
+          p1Pos = Math.min(boardSize - 1, p1Pos + currentSpin);
+          if (bonusTiles.includes(p1Pos)) p1Pos = Math.min(boardSize - 1, p1Pos + 1);
+        } else {
+          p2Pos = Math.min(boardSize - 1, p2Pos + currentSpin);
+          if (bonusTiles.includes(p2Pos)) p2Pos = Math.min(boardSize - 1, p2Pos + 1);
+        }
+
+        if (animEl) {
+          animEl.innerText = `+0 PTS`;
+          animEl.classList.remove('opacity-0');
+          setTimeout(() => animEl.classList.add('opacity-0'), 1800);
+        }
+      }
+
+      renderTokens();
+
+      // Check Victory Condition
+      if (p1Pos >= boardSize - 1 || p2Pos >= boardSize - 1) {
+        confetti({ particleCount: 150, spread: 80, origin: { y: 0.6 } });
+      }
+    }
+
+    function closeQuestionModal() {
+      document.getElementById('questionModal').classList.add('hidden');
+
+      if (p1Pos >= boardSize - 1 || p2Pos >= boardSize - 1) {
+        const winner = p1Pos >= boardSize - 1 ? 'Player 1' : 'Player 2';
+        alert(`🎉 CONGRATULATIONS! ${winner} reached the finish line!\nFinal Scores:\nPlayer 1: ${p1Pts} PTS\nPlayer 2: ${p2Pts} PTS`);
+        return;
+      }
+
+      // Switch Turn
+      currentPlayer = currentPlayer === 1 ? 2 : 1;
+      const turnBadge = document.getElementById('turnBadge');
+      const turnText = document.getElementById('turnText');
+      const turnDot = document.getElementById('turnDot');
+      const p1Card = document.getElementById('p1Card');
+      const p2Card = document.getElementById('p2Card');
+
+      if (currentPlayer === 1) {
+        turnBadge.className = 'flex items-center gap-2 px-4 py-2 rounded-xl font-bold text-sm bg-red-500/20 text-red-400 border border-red-500/40';
+        turnDot.className = 'w-3 h-3 rounded-full bg-red-500 animate-ping';
+        turnText.innerText = 'Player 1 Turn';
+        p1Card.classList.add('active-turn-card', 'border-red-500/40');
+        p2Card.classList.remove('active-turn-card', 'border-cyan-500/40');
+      } else {
+        turnBadge.className = 'flex items-center gap-2 px-4 py-2 rounded-xl font-bold text-sm bg-cyan-500/20 text-cyan-400 border border-cyan-500/40';
+        turnDot.className = 'w-3 h-3 rounded-full bg-cyan-400 animate-ping';
+        turnText.innerText = 'Player 2 Turn';
+        p2Card.classList.add('active-turn-card', 'border-cyan-500/40');
+        p1Card.classList.remove('active-turn-card', 'border-red-500/40');
+      }
+
+      document.getElementById('spinBtn').disabled = false;
+      document.getElementById('spinResultText').innerText = 'Click spin to reveal movement potential!';
+    }
+
+    // Allow Enter key to submit answer
+    document.getElementById('userAnswerInput').addEventListener('keyup', function(event) {
+      if (event.key === 'Enter') {
+        submitAnswer();
+      }
+    });
+
+    // Initialize On Page Load
+    buildBoard();
+    drawSpinner();
+  </script>
+</body>
+</html>
